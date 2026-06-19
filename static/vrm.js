@@ -284,7 +284,7 @@ function loadVRM() {
     Object.keys(vrmaClips).forEach(k => delete vrmaClips[k]);
 
     loader.load(
-        '/static/furry.vrm',
+        '/static/Furry.vrm',
         (gltf) => {
             vrm = gltf.userData.vrm;
             VRMUtils.rotateVRM0(vrm);
