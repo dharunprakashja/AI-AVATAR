@@ -48,8 +48,6 @@ from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 import time as time_module
 import json
-from flask import Flask
-from flask_cors import CORS
 from pipecat.frames.frames import MetricsFrame, EndFrame, CancelFrame
 import time as time_module
 from google.genai import types
@@ -67,7 +65,7 @@ ui_list = []
 llm = None
 
 # ── Hardcoded config ──────────────────────────────────────────────────────────
-GOOGLE_API_KEY = os.environ.get("GOOGLE_API_KEY", "AIzaSyD5-0t4hyRbPFaQrudY-cdahWQ-IbW8ilg")
+GOOGLE_API_KEY = os.environ.get("GOOGLE_API_KEY")
 DEFAULT_VOICE = "Schedar"
 
 SYSTEM_INSTRUCTION = """
@@ -701,9 +699,6 @@ class RawPCMSerializer(FrameSerializer):
         )
 
 
-app = Flask(__name__)
-CORS(app, origins="*", supports_credentials=False)
-
 safety_settings = [
     {"category": HarmCategory.HARM_CATEGORY_HATE_SPEECH,        "threshold": HarmBlockThreshold.BLOCK_NONE},
     {"category": HarmCategory.HARM_CATEGORY_HARASSMENT,          "threshold": HarmBlockThreshold.BLOCK_NONE},
@@ -717,23 +712,23 @@ async def lifespan(app: FastAPI):
     yield
 
 
-appAPI = FastAPI(lifespan=lifespan)
-appAPI.add_middleware(
+app = FastAPI(lifespan=lifespan)
+app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
-appAPI.mount("/static", StaticFiles(directory="static"), name='static')
+app.mount("/static", StaticFiles(directory="static"), name='static')
 
 
-@appAPI.get('/')
+@app.get('/')
 async def index():
     with open("templates/index.html") as f:
         return HTMLResponse(f.read())
 
 
-@appAPI.websocket('/audio')
+@app.websocket('/audio')
 async def audio_ws(websocket: WebSocket):
     await websocket.accept()
     await run_hosbot(websocket)
@@ -828,7 +823,7 @@ async def run_hosbot(websocket: WebSocket):
     await runner.run(task)
 
 
-@appAPI.get("/greet")
+@app.get("/greet")
 async def greet():
     global greeted
     if task is None:
@@ -850,14 +845,14 @@ async def greet():
     return "greeted"
 
 
-@appAPI.get("/stop")
+@app.get("/stop")
 async def stop():
     global greeted
     greeted = False
     return "stopped"
 
 
-@appAPI.get("/restart")
+@app.get("/restart")
 async def restart():
     global greeted, task
     greeted = False
@@ -867,7 +862,7 @@ async def restart():
     return "restarted"
 
 
-@appAPI.api_route("/resume", methods=["POST", "GET"])
+@app.api_route("/resume", methods=["POST", "GET"])
 async def resume(req: Request):
     global task
     msg = {}
@@ -892,7 +887,7 @@ Continue naturally. Apologise briefly for the drop and pick up where you left of
         return "Error occurred while resuming"
 
 
-@appAPI.get("/transcript")
+@app.get("/transcript")
 async def transcript():
     queue = asyncio.Queue()
     transcript_client.append(queue)
@@ -909,7 +904,7 @@ async def transcript():
     return StreamingResponse(generator(), media_type="text/event-stream")
 
 
-@appAPI.get("/gen-ui")
+@app.get("/gen-ui")
 async def gen_ui_end():
     queue = asyncio.Queue()
     generat_ui.append(queue)
@@ -938,4 +933,5 @@ async def send_transcript(role: str, text: str):
 
 
 if __name__ == "__main__":
-    uvicorn.run(appAPI, host="0.0.0.0", port=5001)
+    port = int(os.environ.get("PORT", 5001))
+    uvicorn.run(app, host="0.0.0.0", port=port)
